@@ -1,0 +1,17 @@
+langchain
+langchainhub
+langchain_community
+gradio
+gradio_client
+tavily-python
+faiss-cpu
+beautifulsoup4
+pandas
+numpy
+langchain-core
+langchain-openai
+langchain-text-splitters
+langchain-community
+faiss-cpu
+langchain-tavily
+
