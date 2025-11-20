@@ -20,7 +20,6 @@ from langchain_core.chat_history import BaseChatMessageHistory
 import os
 
 ## Set the OpenAI API key and model name
-Open_API_Key = os.environ["OPENAI_API_KEY"]
 MODEL="gpt-4o-mini"
 summary_llm = ChatOpenAI(model=MODEL, temperature=0, streaming=True)
 
@@ -42,9 +41,10 @@ retriever = vector.as_retriever(search_type="similarity", search_kwargs={"k": 3}
 
 
 # Define a tool for Amazon product search 
-@tool("amazon_product_search")
+@tool("amazon_product_search", description="Search for information about Amazon products. For any questions related to Amazon products, this tool must be used.")
 def amazon_product_search(query: str) -> str:
-    """Tool to search for Amazon products."""
+    """Search for information about Amazon products.
+    For any questions related to Amazon products, this tool must be used."""
     results = retriever.get_relevant_documents(query)
     if not results:
         return "No relevant products found."
@@ -52,7 +52,7 @@ def amazon_product_search(query: str) -> str:
     formatted_results = "\n".join([f"- {doc.page_content}" for doc in results])
     return f"Here are some relevant Amazon products:\n{formatted_results}"
 
-search_tavily =  TavilySearch(max_results=3,include_answer=True,search_depth="basic").as_tool()
+search_tavily =  TavilySearch(max_results=5)
 
 
 # hwchase17/react is a prompt template designed for ReAct-style
@@ -88,8 +88,8 @@ def get_session_history(session_id: str) -> BaseChatMessageHistory:
 agent_with_history = RunnableWithMessageHistory(
     summary_react_agent,
     get_session_history,
-    input_messages_key="messages",
-    history_messages_key="messages"
+    input_messages_key="input",
+    history_messages_key="chat_history"
 )
 
 
@@ -99,8 +99,9 @@ import gradio as gr
 # Define function for Gradio interface
 def chat_with_agent(user_input, session_id):
     """Processes user input and maintains session-based chat history."""
+    memory = get_session_history(session_id)
     response = agent_with_history.invoke(
-        {"messages": [{"role":"user", "content": user_input}]},
+        {"input": [{"role":"user", "content": user_input}], "chat_history": memory.messages},
         config={"configurable": {"session_id": session_id}}
     )
 
@@ -120,7 +121,7 @@ with gr.Blocks() as app:
         output_box = gr.Textbox(label="Response:", lines=10)
 
     submit_button = gr.Button("Submit")
-    session_state = gr.State(value=str(uuid7()))
+    session_state = gr.State(value=str(uuid7()))  # Unique session ID for user
 
     submit_button.click(chat_with_agent, inputs=[input_box, session_state], outputs=output_box)
 
