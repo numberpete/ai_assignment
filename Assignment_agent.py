@@ -131,4 +131,4 @@ with gr.Blocks() as app:
     submit_button.click(chat_with_agent, inputs=[input_box, session_state], outputs=output_box)
 
 # Launch the Gradio app
-app.launch(debug=True, share=True)
+app.launch(debug=True, share=True,server_name="0.0.0.0", server_port=7860)
