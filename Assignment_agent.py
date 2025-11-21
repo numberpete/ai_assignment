@@ -11,6 +11,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_tavily import TavilySearch
 from langchain.agents import create_agent
 from langchain.agents.middleware import before_model
+from langchain.messages import HumanMessage, AIMessage, SystemMessage
 
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
@@ -21,7 +22,7 @@ import os
 
 ## Set the OpenAI API key and model name
 MODEL="gpt-4o-mini"
-summary_llm = ChatOpenAI(model=MODEL, temperature=0, streaming=True)
+summary_llm = ChatOpenAI(model=MODEL, temperature=0, streaming=True, cache=False)
 
 ## Set the Tavily API key, done in .envrc
 
@@ -41,11 +42,13 @@ retriever = vector.as_retriever(search_type="similarity", search_kwargs={"k": 3}
 
 
 # Define a tool for Amazon product search 
-@tool("amazon_product_search", description="Search for information about Amazon products. For any questions related to Amazon products, this tool must be used.")
+@tool("amazon_product_search", description="Search for information about Amazon products.  If the user asks about a top-rated product on Amazon, you may use search_tavily tool. For any other questions related to Amazon products, this tool must be used.")
 def amazon_product_search(query: str) -> str:
     """Search for information about Amazon products.
-    For any questions related to Amazon products, this tool must be used."""
-    results = retriever.get_relevant_documents(query)
+    If the user asks about a top-rated product on Amazon, you may use search_tavily tool instead.
+    For any other questions related to Amazon products, this tool must be used.
+    """
+    results = retriever.invoke(query)
     if not results:
         return "No relevant products found."
     # Format the results for better readability
@@ -75,8 +78,10 @@ tools = [amazon_product_search, search_tavily] # TODO: Create a list of tools ba
 summary_react_agent = create_agent(
     model=summary_llm,
     tools=tools,  # Pass your list of tools here
-    system_prompt=prompt.template
+    system_prompt=prompt.template,
+    debug=True,
 )
+
 
 store = {}
 
@@ -92,22 +97,22 @@ agent_with_history = RunnableWithMessageHistory(
     history_messages_key="chat_history"
 )
 
-
 # Building an UI for the chatbot with agents
 import gradio as gr
 
 # Define function for Gradio interface
 def chat_with_agent(user_input, session_id):
     """Processes user input and maintains session-based chat history."""
-    memory = get_session_history(session_id)
+    
+    get_session_history(session_id).messages.append(HumanMessage(content=user_input))
     response = agent_with_history.invoke(
-        {"input": [{"role":"user", "content": user_input}], "chat_history": memory.messages},
+        {"input":user_input, "messages":get_session_history(session_id).messages},
         config={"configurable": {"session_id": session_id}}
     )
 
     # Extract only the 'output' field from the response
-    if isinstance(response, dict) and "output" in response:
-        return response["output"]  # Return clean text response
+    if isinstance(response, dict) and "messages" in response:
+        return response["messages"][-1].content  # Return clean text response
     else:
         return response
 
